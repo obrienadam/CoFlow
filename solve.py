@@ -2,15 +2,10 @@ from setup import input
 import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 import numpy as np
+import matplotlib
+matplotlib.use('Qt4Agg')
 import matplotlib.pylab as plt
 import math
-
-def sin_func(ny):
-    x = np.linspace(0, math.pi, ny)
-    return np.sin(x)
-
-def const_func(ny):
-    return np.array([1.]*ny)
 
 def assemble(input, func):
     """
@@ -81,10 +76,10 @@ def assemble(input, func):
     # At x = 0, we have some function y
     rhs[1:ny - 1] = -a_s[1]*func(ny - 2)
 
-    return mat, rhs
+    return sp.csr_matrix(mat), rhs
 
 if __name__ == '__main__':
-    mat, rhs = assemble(input, const_func)
+    mat, rhs = assemble(input, input['F(y)'])
     phi = spla.spsolve(mat, rhs)
 
     nx, ny = input['nx'], input['ny']
