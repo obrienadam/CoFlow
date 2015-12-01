@@ -5,7 +5,6 @@ import numpy as np
 import matplotlib
 matplotlib.use('Qt4Agg')
 import matplotlib.pylab as plt
-import math
 
 def assemble(input, func):
     """
@@ -20,8 +19,8 @@ def assemble(input, func):
     Bi = input['Bi']
     NTU = input['NTU']
 
-    hx = lx/(nx + 1)
-    hy = ly/(ny + 1)
+    hx = lx/(nx - 1)
+    hy = ly/(ny - 1)
 
     n = nx*ny
 
@@ -74,25 +73,53 @@ def assemble(input, func):
     rhs = np.zeros(n)
 
     # At x = 0, we have some function y
-    rhs[1:ny - 1] = -a_s[1]*func(ny - 2)
+    rhs[1:ny-1] = -a_s[1]*1.
 
     return sp.csr_matrix(mat), rhs
 
+def write_csv(input, x, y, phi):
+    file_name = 'data_R{}_Bi{}_NTU_{}.csv'.format(input['R'], input['Bi'], input['NTU'])
+    file_name = file_name.replace('.', ',', 3)
+
+    with open(file_name, 'w') as out_file:
+        for j in xrange(phi.shape[1]):
+            out_file.write(', '.join(map(str, phi[:, j])) + '\n')
+
+        out_file.write('\n')
+
+        for j in xrange(phi.shape[1]):
+            out_file.write(', '.join(map(str, y[:, j])) + '\n')
+
+        out_file.write('\n')
+
+        for j in xrange(phi.shape[1]):
+            out_file.write(', '.join(map(str, x[:, j])) + '\n')
+
+
 if __name__ == '__main__':
+    nx, ny = input['nx'] - 1, input['ny']
+    lx, ly = input['length_x'], input['length_y']
+    hx, hy = input['length_x']/(nx - 1), input['length_y']/(ny - 1)
+
+    # Adjust
+    input['nx'] -= 1
+    input['length_x'] -= hx
+
+    # Solve the problem
     mat, rhs = assemble(input, input['F(y)'])
-    phi = spla.spsolve(mat, rhs)
 
-    nx, ny = input['nx'], input['ny']
-    hx, hy = input['length_x']/(nx-1), input['length_y']/(ny-1)
+    x, y = np.meshgrid(np.linspace(0, ly, ny), np.linspace(0, lx, nx + 1), indexing='ij')
 
-    x, y = np.meshgrid(np.linspace(0, ny*hy,ny), np.linspace(0, nx*hx,nx), indexing='ij')
-
-    phi = np.reshape(phi, (ny, nx), order='F')
+    phi_i = np.reshape(spla.spsolve(mat, rhs), (ny, nx), order='F')
+    phi = np.zeros((ny, nx + 1), order='F')
+    phi[:, 1:] = phi_i
+    phi[:, 0] = 1.
 
     print np.min(np.min(phi))
 
+    write_csv(input, x, y, phi)
+
     plt.contourf(x,y,phi)
     plt.axis('equal')
+    plt.grid(True)
     plt.show()
-
-    print x

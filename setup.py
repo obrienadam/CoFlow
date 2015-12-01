@@ -21,14 +21,14 @@ class BoundaryFunc(object):
 
 
 input = {
-    'nx': int(1900),
-    'ny': int(190),
+    'nx': int(900),
+    'ny': int(90),
     'length_x': float(10),
     'length_y': float(1),
-    'R': float(1),
-    'Bi': float(1),
-    'NTU': float(1),
-    'F(y)': BoundaryFunc(np.sin, math.pi),
+    'R': float(10),
+    'Bi': float(10),
+    'NTU': float(10),
+    'F(y)': BoundaryFunc(1., math.pi),
 }
 
 if __name__ == '__main__':
