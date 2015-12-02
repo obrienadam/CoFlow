@@ -73,7 +73,7 @@ def assemble(input, func):
     rhs = np.zeros(n)
 
     # At x = 0, we have some function y
-    rhs[1:ny-1] = -a_s[1]*1.
+    rhs[1:ny-1] = -a_s[1]*func(np.linspace(0, input['length_y'], input['ny']))[1:-1]
 
     return sp.csr_matrix(mat), rhs
 
@@ -110,10 +110,9 @@ if __name__ == '__main__':
 
     x, y = np.meshgrid(np.linspace(0, ly, ny), np.linspace(0, lx, nx + 1), indexing='ij')
 
-    phi_i = np.reshape(spla.spsolve(mat, rhs), (ny, nx), order='F')
     phi = np.zeros((ny, nx + 1), order='F')
-    phi[:, 1:] = phi_i
-    phi[:, 0] = 1.
+    phi[:, 1:] = np.reshape(spla.spsolve(mat, rhs), (ny, nx), order='F')
+    phi[:, 0] = input['F(y)'](np.linspace(0, ly, ny))
 
     print np.min(np.min(phi))
 

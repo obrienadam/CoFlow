@@ -21,17 +21,16 @@ class BoundaryFunc(object):
 
 
 input = {
-    'nx': int(900),
-    'ny': int(90),
+    'nx': int(1001),
+    'ny': int(101),
     'length_x': float(10),
     'length_y': float(1),
     'R': float(10),
     'Bi': float(10),
     'NTU': float(10),
-    'F(y)': BoundaryFunc(1., math.pi),
+    'F(y)': BoundaryFunc(np.sin, math.pi),
 }
 
 if __name__ == '__main__':
     bfunc = BoundaryFunc(np.square, 1.)
-
     print bfunc(np.linspace(0, 1, input['ny']))
