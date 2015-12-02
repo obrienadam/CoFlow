@@ -78,7 +78,7 @@ def assemble(input, func):
     return sp.csr_matrix(mat), rhs
 
 def write_csv(input, x, y, phi):
-    file_name = 'data_R{}_Bi{}_NTU_{}.csv'.format(input['R'], input['Bi'], input['NTU'])
+    file_name = '{}_data_R{}_Bi{}_NTU_{}.csv'.format(input['Case name'], input['R'], input['Bi'], input['NTU'])
     file_name = file_name.replace('.', ',', 3)
 
     with open(file_name, 'w') as out_file:
@@ -106,19 +106,31 @@ if __name__ == '__main__':
     input['length_x'] -= hx
 
     # Solve the problem
+    print "Assembling the global matrix..."
     mat, rhs = assemble(input, input['F(y)'])
+    print "Finished assembling matrix."
 
     x, y = np.meshgrid(np.linspace(0, ly, ny), np.linspace(0, lx, nx + 1), indexing='ij')
 
     phi = np.zeros((ny, nx + 1), order='F')
+    print "Solving the global system of equations..."
     phi[:, 1:] = np.reshape(spla.spsolve(mat, rhs), (ny, nx), order='F')
+    print "Finished solving the global system of equations."
+
     phi[:, 0] = input['F(y)'](np.linspace(0, ly, ny))
 
-    print np.min(np.min(phi))
-
+    print "Writing solution to csv file..."
     write_csv(input, x, y, phi)
+    print "Finished writing solution to csv file."
 
-    plt.contourf(x,y,phi)
+    print "Plotting solution and saving image to .png format..."
+    fig = plt.figure()
+    plt.contourf(x, y, phi, input['Contour levels'])
     plt.axis('equal')
     plt.grid(True)
-    plt.show()
+    plt.colorbar()
+    fig.savefig('{}.png'.format(input['Case name']), dpi=fig.dpi)
+    print "Finished plotting solution and saving to .png format."
+
+    if input['Show plot']:
+        plt.show()

@@ -21,8 +21,11 @@ class BoundaryFunc(object):
 
 
 input = {
-    'nx': int(1001),
-    'ny': int(101),
+    'Case name': 'CoFlow',
+    'Show plot': True,
+    'Contour levels': np.linspace(0, 1, 101),
+    'nx': int(4001),
+    'ny': int(401),
     'length_x': float(10),
     'length_y': float(1),
     'R': float(10),
