@@ -131,6 +131,7 @@ if __name__ == '__main__':
     plt.colorbar()
     fig.savefig('{}.png'.format(input['Case name']), dpi=fig.dpi)
     print "Finished plotting solution and saving to .png format."
+    print "Min value: {}    Max value: {}".format(np.min(np.min(phi)), np.max(np.max(phi)))
 
     if input['Show plot']:
         plt.show()

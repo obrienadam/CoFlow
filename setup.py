@@ -16,6 +16,14 @@ class BoundaryFunc(object):
 
         self.scalar = scalar
 
+    @property
+    def scalar(self):
+        return self.__scalar
+
+    @scalar.setter
+    def scalar(self, scalar):
+        self.__scalar = float(scalar)
+
     def __call__(self, y):
         return self.func(self.scalar*y)
 
@@ -24,16 +32,21 @@ input = {
     'Case name': 'CoFlow',
     'Show plot': True,
     'Contour levels': np.linspace(0, 1, 101),
-    'nx': int(4001),
-    'ny': int(401),
+    'nx': int(1001),
+    'ny': int(101),
     'length_x': float(10),
     'length_y': float(1),
     'R': float(10),
     'Bi': float(10),
     'NTU': float(10),
-    'F(y)': BoundaryFunc(np.sin, math.pi),
+    'F(y)': BoundaryFunc(np.tanh, math.pi),
 }
 
 if __name__ == '__main__':
-    bfunc = BoundaryFunc(np.square, 1.)
-    print bfunc(np.linspace(0, 1, input['ny']))
+    bfunc = BoundaryFunc(np.square, int(1))
+
+    print bfunc.scalar
+
+    bfunc.__scalar = int(1)
+
+    print bfunc.__scalar
