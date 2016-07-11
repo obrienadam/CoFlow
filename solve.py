@@ -16,28 +16,39 @@ def assemble(input, func):
     lx = input['length_x']
     ly = input['length_y']
     R = input['R']
-    Bi = input['Bi']
+    Bi_input = input['Bi']
     NTU = input['NTU']
 
     hx = lx/(nx - 1)
     hy = ly/(ny - 1)
 
+    print "Mesh spacing: ({}x{})".format(hx, hy)
+
     n = nx*ny
 
-    a_p = -2/hy**2 - 2*R/hx**2 - Bi/(NTU*hx)
+    Bi = np.array([0.]*n, order='F')
+    for i in xrange(0, n, ny):
+        x = (int(i)/int(ny) + 1)*hx
+
+        for u_loc, Bi_val in Bi_input:
+            if x <= u_loc:
+                Bi[i:i + ny] = Bi_val
+                break
+
+    a_p = -2/hy**2 - 2*R/hx**2 #- Bi/(NTU*hx)
     a_e = 1/hy**2
     a_w = 1/hy**2
 
     a_n = R/hx**2
-    a_s = R/hx**2 + Bi/(NTU*hx)
+    a_s = R/hx**2 #+ Bi/(NTU*hx)
 
-    a_p = np.array([a_p]*n, order='F')
-    a_e = np.array([a_e]*n, order='F')
-    a_w = np.array([a_w]*n, order='F')
-    a_n = np.array([a_n]*n, order='F')
-    a_s = np.array([a_s]*n, order='F')
+    a_p_diag = np.array([a_p]*n, order='F') - Bi/(NTU*hx)
+    a_e_diag = np.array([a_e]*n, order='F')
+    a_w_diag = np.array([a_w]*n, order='F')
+    a_n_diag = np.array([a_n]*n, order='F')
+    a_s_diag = np.array([a_s]*n, order='F') + Bi/(NTU*hx)
 
-    diags = [a_s, a_w, a_p, a_e, a_n]
+    diags = [a_s_diag, a_w_diag, a_p_diag, a_e_diag, a_n_diag]
     # Set the rows that correspond to third kind boundary to 0 (east side)
     for d in diags:
         d[ny - 1::ny] = 0.
@@ -52,28 +63,28 @@ def assemble(input, func):
     #a_w[::ny] = 0.
 
     # Trim the diagonals
-    a_e = a_e[:-1]
-    a_w = a_w[1:]
-    a_n = a_n[:n - ny]
-    a_s = a_s[ny:]
+    a_e_diag = a_e_diag[:-1]
+    a_w_diag = a_w_diag[1:]
+    a_n_diag = a_n_diag[:n - ny]
+    a_s_diag = a_s_diag[ny:]
 
-    diags = [a_s, a_w, a_p, a_e, a_n]
+    diags = [a_s_diag, a_w_diag, a_p_diag, a_e_diag, a_n_diag]
 
     mat = sp.diags(diags, [-ny,-1,0,1,ny], format='lil')
 
     # Set up the equations for the third-kind boundary problem
-    a_p = 1./hy + Bi
+    a_p = 1./hy # + Bi
     a_w = -1./hy
 
     for i in xrange(ny - 1, n, ny):
-        mat[i,i] = a_p
+        mat[i,i] = a_p + Bi[i]
         mat[i,i-1] = a_w
 
     # Start assembling the rhs
     rhs = np.zeros(n)
 
     # At x = 0, we have some function y
-    rhs[1:ny-1] = -a_s[1]*func(np.linspace(0, input['length_y'], input['ny']))[1:-1]
+    rhs[1:ny-1] = -a_s_diag[1]*func(np.linspace(0, input['length_y'], input['ny']))[1:-1]
 
     return sp.csr_matrix(mat), rhs
 
