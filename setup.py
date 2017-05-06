@@ -30,14 +30,14 @@ class BoundaryFunc(object):
 
 input = {
     'Case name': 'CoFlow',
-    'Show plot': True,
     'Contour levels': np.linspace(0, 1, 101),
     'nx': int(2001),
     'ny': int(201),
     'length_x': float(10),
     'length_y': float(1),
     'R': float(1),
-    'Bi': [(2, 0.), (4, 1.), (10, 1.)],
+    'Bi': [(10., 1)],
+    'Bi_limit': 10.,
     'NTU': float(1),
     'F(y)': BoundaryFunc(1.),
 }

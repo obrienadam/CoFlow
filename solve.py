@@ -1,15 +1,15 @@
 from setup import input
 import scipy.sparse as sp
 import scipy.sparse.linalg as spla
+import scipy.integrate as integrate
 import numpy as np
 import matplotlib
-matplotlib.use('Qt4Agg')
+#matplotlib.use('Qt4Agg')
 import matplotlib.pylab as plt
 
-def assemble(input, func):
+def solve(input, func):
     """
-    :param input: An input dictionary
-    :return: Sparse matrix and rhs vector
+    (dict, function) -> np_array
     """
     nx = input['nx']
     ny = input['ny']
@@ -76,6 +76,16 @@ def assemble(input, func):
     a_p = 1./hy # + Bi
     a_w = -1./hy
 
+    Bi_input = [(input['Bi_limit'], Bi_input[0][1]), (10., 0.)]
+    Bi = np.array([0.]*n, order='F')
+    for i in xrange(0, n, ny):
+        x = (int(i)/int(ny) + 1)*hx
+
+        for u_loc, Bi_val in Bi_input:
+            if x <= u_loc:
+                Bi[i:i + ny] = Bi_val
+                break
+
     for i in xrange(ny - 1, n, ny):
         mat[i,i] = a_p + Bi[i]
         mat[i,i-1] = a_w
@@ -86,7 +96,14 @@ def assemble(input, func):
     # At x = 0, we have some function y
     rhs[1:ny-1] = -a_s_diag[1]*func(np.linspace(0, input['length_y'], input['ny']))[1:-1]
 
-    return sp.csr_matrix(mat), rhs
+    phi = np.zeros((ny, nx + 1), order='F')
+    print "Solving the global system of equations..."
+    phi[:, 1:] = np.reshape(spla.spsolve(mat, rhs), (ny, nx), order='F')
+    print "Finished solving the global system of equations."
+    phi[:, 0] = input['F(y)'](np.linspace(0, ly, ny))
+
+    return phi
+
 
 def write_csv(input, x, y, phi):
     file_name = '{}_data_R{}_Bi{}_NTU_{}.csv'.format(input['Case name'], input['R'], input['Bi'], input['NTU'])
@@ -107,7 +124,7 @@ def write_csv(input, x, y, phi):
             out_file.write(', '.join(map(str, x[:, j])) + '\n')
 
 
-if __name__ == '__main__':
+def main(input=input, show_plot=True):
     nx, ny = input['nx'] - 1, input['ny']
     lx, ly = input['length_x'], input['length_y']
     hx, hy = input['length_x']/(nx - 1), input['length_y']/(ny - 1)
@@ -117,18 +134,28 @@ if __name__ == '__main__':
     input['length_x'] -= hx
 
     # Solve the problem
-    print "Assembling the global matrix..."
-    mat, rhs = assemble(input, input['F(y)'])
-    print "Finished assembling matrix."
+    phi = solve(input, input['F(y)'])
 
     x, y = np.meshgrid(np.linspace(0, ly, ny), np.linspace(0, lx, nx + 1), indexing='ij')
 
-    phi = np.zeros((ny, nx + 1), order='F')
-    print "Solving the global system of equations..."
-    phi[:, 1:] = np.reshape(spla.spsolve(mat, rhs), (ny, nx), order='F')
-    print "Finished solving the global system of equations."
+    # Write solution at x = 1
+    i = int(1./hx) + 1
+    phi_out = phi[:, i]
 
-    phi[:, 0] = input['F(y)'](np.linspace(0, ly, ny))
+    with open('phi_out_x_1.txt', 'w') as f:
+        f.write('\n'.join(map(str, phi_out)))
+
+    j = int(1./hy)
+    phi_wall = phi[-1,:i+1]
+    y_wall = y[-1,:i+1]
+
+    with open('y_wall.txt', 'w') as f:
+        f.write('\n'.join(map(str, y_wall)))
+
+    with open('phi_wall.txt', 'w') as f:
+        f.write('\n'.join(map(str, phi_wall)))
+
+    wall_flux = integrate.simps(phi_wall, y_wall)
 
     print "Writing solution to csv file..."
     write_csv(input, x, y, phi)
@@ -144,5 +171,11 @@ if __name__ == '__main__':
     print "Finished plotting solution and saving to .png format."
     print "Min value: {}    Max value: {}".format(np.min(np.min(phi)), np.max(np.max(phi)))
 
-    if input['Show plot']:
+    print show_plot
+    if show_plot:
         plt.show()
+
+    return wall_flux
+
+if __name__ == '__main__':
+    main()
