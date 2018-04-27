@@ -1,6 +1,7 @@
 from scipy.sparse import csr_matrix
 from scipy.sparse.linalg import spsolve
 import numpy as np
+import h5py
 
 
 def solve_co_flow(input):
@@ -11,68 +12,73 @@ def solve_co_flow(input):
     Bi = input['Bi']
     R = input['R']
     NTU = input['NTU']
+    C = input['C']
     x_0_boundary = input['x_0_boundary']
+    qs = input.get('Qs', lambda x, y: 0.)
+    qf = input.get('Qf', lambda x: 0.)
 
     # define constants and fields
     hx, hy = float(lx) / (nx - 1), float(ly) / (ny - 1)
-    phi = np.array((nx, ny), dtype=float)
     x_coords, y_coords = np.meshgrid(np.linspace(0, lx, nx), np.linspace(0, ly, ny), indexing='ij')
-    inds = np.reshape(a=np.arange(nx * ny), newshape=(nx, ny))
+
+    solid_inds = np.reshape(a=np.arange(nx * ny), newshape=(nx, ny))
+    fluid_inds = np.arange(nx * ny, nx * ny + ny)
 
     # Assemble equations
     ij = []
     coeffs = []
-    src = np.zeros((nx * ny))
+    src = np.zeros((nx * ny + ny))
 
-    # Assemble the interior equations
+    # Assemble the solid equations
     for i in xrange(1, nx - 1):
         for j in xrange(1, ny - 1):
             x, y = x_coords[i, j], y_coords[i, j]
 
             # Center coefficient
-            ij.append((inds[i][j], inds[i][j]))
+            ij.append((solid_inds[i, j], solid_inds[i, j]))
             coeffs.append(-2 * R(x, y) / hx ** 2 - 2 / hy ** 2)
 
             # y+ coefficient
-            ij.append((inds[i][j], inds[i][j + 1]))
+            ij.append((solid_inds[i, j], solid_inds[i, j + 1]))
             coeffs.append(1 / hy ** 2)
 
             # y- coefficient
-            ij.append((inds[i][j], inds[i][j - 1]))
+            ij.append((solid_inds[i, j], solid_inds[i, j - 1]))
             coeffs.append(1 / hy ** 2)
 
             # x+ coefficient
-            ij.append((inds[i][j], inds[i + 1][j]))
+            ij.append((solid_inds[i, j], solid_inds[i + 1, j]))
             coeffs.append(R(x, y) / hx ** 2)
 
             # x- coefficient
-            ij.append((inds[i][j], inds[i - 1][j]))
+            ij.append((solid_inds[i, j], solid_inds[i - 1, j]))
             coeffs.append(R(x, y) / hx ** 2)
 
             # Advection
             if i == 1:
-                ij.append((inds[i, j], inds[i, j]))
-                ij.append((inds[i, j], inds[i - 1, j]))
-                ij.append((inds[i, j], inds[i - 1, j]))
+                ij.append((solid_inds[i, j], solid_inds[i + 1, j]))
+                ij.append((solid_inds[i, j], solid_inds[i - 1, j]))
 
-                coeffs.append(-1.5 * (Bi(x, y) / NTU(x, y)) / hx)
-                coeffs.append(2 * (Bi(x, y) / NTU(x, y)) / hx)
-                coeffs.append(-0.5 * (Bi(x, y) / NTU(x, y)) / hx)
+                coeffs.append(-Bi(x, y) / NTU(x, y) / hx / 2.)
+                coeffs.append(Bi(x, y) / NTU(x, y) / hx / 2.)
             else:
-                ij.append((inds[i, j], inds[i, j]))
-                ij.append((inds[i, j], inds[i - 1, j]))
-                ij.append((inds[i, j], inds[i - 2, j]))
+                ij.append((solid_inds[i, j], solid_inds[i, j]))
+                ij.append((solid_inds[i, j], solid_inds[i - 1, j]))
+                ij.append((solid_inds[i, j], solid_inds[i - 2, j]))
                 coeffs.append(-1.5 * (Bi(x, y) / NTU(x, y)) / hx)
                 coeffs.append(2 * (Bi(x, y) / NTU(x, y)) / hx)
                 coeffs.append(-0.5 * (Bi(x, y) / NTU(x, y)) / hx)
+
+            # Src
+            src[solid_inds[i, j]] = -qs(x, y)
 
     # Assemble x* = 0 boundary (fixed)
     for j in xrange(0, ny):
         y = y_coords[0, j]
 
-        ij.append((inds[0, j], inds[0, j]))
+        ij.append((solid_inds[0, j], solid_inds[0, j]))
         coeffs.append(1)
-        src[inds[0, j]] += x_0_boundary(y)
+        src[solid_inds[0, j]] += x_0_boundary(y)
 
     # Assemble x* = l boundary (infinite)
     for j in xrange(1, ny - 1):
@@ -86,11 +92,11 @@ def solve_co_flow(input):
         coeffs.append(0.5)
         """
         # hx coefficients
-        ij.append((inds[-1, j], inds[-1, j]))
-        ij.append((inds[-1, j], inds[-2, j]))
-        ij.append((inds[-1, j], inds[-3, j]))
-        ij.append((inds[-1, j], inds[-4, j]))
-        ij.append((inds[-1, j], inds[-5, j]))
+        ij.append((solid_inds[-1, j], solid_inds[-1, j]))
+        ij.append((solid_inds[-1, j], solid_inds[-2, j]))
+        ij.append((solid_inds[-1, j], solid_inds[-3, j]))
+        ij.append((solid_inds[-1, j], solid_inds[-4, j]))
+        ij.append((solid_inds[-1, j], solid_inds[-5, j]))
 
         coeffs.append(35. / 12. / hy ** 2)
         coeffs.append(-104. / 12. / hy ** 2)
@@ -99,18 +105,18 @@ def solve_co_flow(input):
         coeffs.append(11. / 12. / hy ** 2)
 
         # hy coefficients
-        ij.append((inds[-1, j], inds[-1, j]))
-        ij.append((inds[-1, j], inds[-1, j + 1]))
-        ij.append((inds[-1, j], inds[-1, j - 1]))
+        ij.append((solid_inds[-1, j], solid_inds[-1, j]))
+        ij.append((solid_inds[-1, j], solid_inds[-1, j + 1]))
+        ij.append((solid_inds[-1, j], solid_inds[-1, j - 1]))
 
         coeffs.append(-2. * R(x, y) / hx ** 2)
         coeffs.append(R(x, y) / hx ** 2)
         coeffs.append(R(x, y) / hx ** 2)
 
         # Advection
-        ij.append((inds[-1, j], inds[-1, j]))
-        ij.append((inds[-1, j], inds[-2, j]))
-        ij.append((inds[-1, j], inds[-3, j]))
+        ij.append((solid_inds[-1, j], solid_inds[-1, j]))
+        ij.append((solid_inds[-1, j], solid_inds[-2, j]))
+        ij.append((solid_inds[-1, j], solid_inds[-3, j]))
 
         coeffs.append(-1.5 * (Bi(x, y) / NTU(x, y)) / hx)
         coeffs.append(2 * (Bi(x, y) / NTU(x, y)) / hx)
@@ -120,30 +126,60 @@ def solve_co_flow(input):
     for i in xrange(1, nx):
         x = x_coords[i, 0]
 
-        ij.append((inds[i, 0], inds[i, 0]))
-        ij.append((inds[i, 0], inds[i, 1]))
-        ij.append((inds[i, 0], inds[i, 2]))
-        coeffs.append(1.5)
-        coeffs.append(-2.)
-        coeffs.append(0.5)
+        ij.append((solid_inds[i, 0], solid_inds[i, 0]))
+        ij.append((solid_inds[i, 0], solid_inds[i, 1]))
+        ij.append((solid_inds[i, 0], solid_inds[i, 2]))
+        coeffs.extend([1.5, -2, 0.5])
 
     # Assemble y* = 1 boundary (robin)
     for i in xrange(1, nx):
-        x = x_coords[i, -1]
+        x, y = x_coords[i, -1], y_coords[i, -1]
 
-        ij.append((inds[i, -1], inds[i, -1]))
-        ij.append((inds[i, -1], inds[i, -2]))
-        ij.append((inds[i, -1], inds[i, -3]))
+        ij.append((solid_inds[i, -1], solid_inds[i, -1]))
+        ij.append((solid_inds[i, -1], solid_inds[i, -2]))
+        ij.append((solid_inds[i, -1], solid_inds[i, -3]))
+        coeffs.extend([1.5 / hy, -2. / hy, 0.5 / hy])
 
-        coeffs.append(Bi(x, 1) + 1.5 / hy)
-        coeffs.append(-2. / hy)
-        coeffs.append(0.5 / hy)
+        ij.append((solid_inds[i, -1], fluid_inds[i]))
+        ij.append((solid_inds[i, -1], solid_inds[i, -1]))
+        coeffs.extend([-Bi(x, y), Bi(x, y)])
 
-    mat = csr_matrix((coeffs, zip(*ij)), shape=(nx * ny, nx * ny))
+    # Assemble the fluid equations
+    # x* = 0 boundary
+    ij.append((fluid_inds[0], fluid_inds[0]))
+    coeffs.append(1.)
+    src[fluid_inds[0]] = 0.
+
+    for i in xrange(1, nx):
+        if i == 1:
+            ij.append((fluid_inds[i], fluid_inds[i + 1]))
+            ij.append((fluid_inds[i], fluid_inds[i - 1]))
+            coeffs.extend([1. / hx / 2., -1. / hx / 2.])
+        else:
+            ij.append((fluid_inds[i], fluid_inds[i]))
+            ij.append((fluid_inds[i], fluid_inds[i - 1]))
+            ij.append((fluid_inds[i], fluid_inds[i - 2]))
+            coeffs.extend([1.5 / hx, -2. / hx, 0.5 / hx])
+
+        # ij.append((fluid_inds[i], fluid_inds[i]))
+        # ij.append((fluid_inds[i], fluid_inds[i - 1]))
+        # coeffs.extend([1. / hx, -1. / hx])
+
+        x, y = x_coords[i, -1], y_coords[i, -1]
+
+        ij.append((fluid_inds[i], solid_inds[i, -1]))
+        ij.append((fluid_inds[i], fluid_inds[i]))
+        coeffs.extend([-NTU(x, y) * C(x), NTU(x, y) * C(x)])
+
+        src[fluid_inds[i]] = qf(x)
+
+    mat = csr_matrix((coeffs, zip(*ij)), shape=(nx * ny + ny, nx * ny + ny))
+
     print 'Finished assembly. Solving...'
-    phi = np.reshape(spsolve(mat, src), newshape=(nx, ny))
 
-    return x_coords, y_coords, phi
+    x = spsolve(mat, src)
+
+    return x_coords, y_coords, np.reshape(x[:nx * ny], newshape=(nx, ny)), x[nx * ny:]
 
 
 def main(input):
@@ -151,40 +187,23 @@ def main(input):
 
 
 if __name__ == '__main__':
-    from math import sin, pi, exp
-
-
-    def Bi(x, y):
-        if y == 1:
-            return 0.1 + 20. * exp(-0.5 * x)
-        else:
-            return 1.
-
-
-    def R(x, y):
-        return 0.
-
-
-    def NTU(x, y):
-        return 1.
-
-
-    def x_0_boundary(y):
-        return 1.
-
+    from math import sin, cos, pi, exp
 
     input = {
-        'nx': 801,
-        'ny': 801,
-        'lx': 1,
-        'ly': 1,
-        'x_0_boundary': x_0_boundary,
-        'Bi': Bi,
-        'R': R,
-        'NTU': NTU,
+        'nx': 1001,
+        'ny': 1001,
+        'lx': 1.,
+        'ly': 1.,
+        'x_0_boundary': lambda y: cos(pi * y / 3.),
+        'Bi': lambda x, y: 10.,
+        'R': lambda x, y: 0.,
+        'NTU': lambda x, y: 20.,
+        'C': lambda x: 0.5,
+        'Qs': lambda x, y: cos(x) * sin(y),
+        'Qf': lambda x: 0.
     }
 
-    x, y, phi = solve_co_flow(input=input)
+    x, y, phi_s, phi_f = solve_co_flow(input=input)
 
     """
     hy = input['ly'] / (input['ny'] - 1.)
@@ -193,42 +212,34 @@ if __name__ == '__main__':
                                Bi(x[i, -1], 1.))
     """
 
-    with open('coflow.dat', 'w') as f:
-        f.write('Title = "CoFlow Exchanger"\n')
-        f.write('Variables = "x", "y", "phi"\n')
-        f.write('Zone T = "Domain" J = {} I = {} F = BLOCK\n'.format(*phi.shape))
+    with h5py.File('coflow.h5', 'w') as f:
+        group = f.create_group('solid')
+        group.create_dataset('x', data=x)
+        group.create_dataset('y', data=y)
+        group.create_dataset('phi_s', data=phi_s)
+        group.create_dataset('Qs', data=np.vectorize(input['Qs'])(x, y))
+        group.create_dataset('Bi', data=np.vectorize(input['Bi'])(x, y))
+        group.create_dataset('R', data=np.vectorize(input['R'])(x, y))
+        group.create_dataset('NTU', data=np.vectorize(input['NTU'])(x, y))
 
-        for x_row in x:
-            f.write('{}\n'.format(' '.join(map(str, x_row))))
+        group = f.create_group('fluid')
+        group.create_dataset('x', data=x[:, -1])
+        group.create_dataset('phi_f', data=phi_f)
 
-        for y_row in y:
-            f.write('{}\n'.format(' '.join(map(str, y_row))))
+        lx, ly = input['lx'], input['ly']
+        nx, ny = input['nx'], input['ny']
+        hx, hy = lx / (nx - 1), ly / (ny - 1)
 
-        for phi_row in phi:
-            f.write('{}\n'.format(' '.join(map(str, phi_row))))
+        for fixed_x in 0, 0.25, 0.5, 0.75, 1.:
+            i = int(fixed_x / ((lx / (nx - 1))))
+            group = f.create_group('x* = {}'.format(fixed_x))
+            group.create_dataset(name='x', data=x[i, :])
+            group.create_dataset(name='y', data=y[i, :])
+            group.create_dataset(name='phi', data=phi_s[i, :])
 
-        f.write('Zone T = "y* = 0 Boundary" I = {} J = {} F = BLOCK\n'.format(phi.shape[0], 1))
-        f.write('{}\n'.format('\n'.join(map(str, x[:, 0]))))
-        f.write('{}\n'.format('\n'.join(map(str, y[:, 0]))))
-        f.write('{}\n'.format('\n'.join(map(str, phi[:, 0]))))
-
-        ly, ny = input['ly'], input['ny']
-        hy = ly / (ny - 1.)
-
-        for fixed_y in 0., 0.25, 0.5, 0.75, 1.:
-            i = int(fixed_y / hy)
-            f.write('Zone T = "y* = {} Boundary" I = {} J = {} F = BLOCK\n'.format(fixed_y, phi.shape[0], 1))
-            f.write('{}\n'.format('\n'.join(map(str, x[:, i]))))
-            f.write('{}\n'.format('\n'.join(map(str, y[:, i]))))
-            f.write('{}\n'.format('\n'.join(map(str, phi[:, i]))))
-
-        lx = input['lx']
-        nx = input['nx']
-        hx = lx / (nx - 1.)
-
-        for fixed_x in 0., 0.25, 0.5, 0.75, 1.:
-            i = int(fixed_x / hx)
-            f.write('Zone T = "x* = {} Exchanger Midpoint" I = {} J = {} F = BLOCK\n'.format(fixed_x, 1, phi.shape[1]))
-            f.write('{}\n'.format('\n'.join(map(str, x[i, :]))))
-            f.write('{}\n'.format('\n'.join(map(str, y[i, :]))))
-            f.write('{}\n'.format('\n'.join(map(str, phi[i, :]))))
+        for fixed_y in 0, 0.25, 0.5, 0.75, 1.:
+            j = int(fixed_y / ((ly / (ny - 1))))
+            group = f.create_group('y* = {}'.format(fixed_y))
+            group.create_dataset(name='x', data=x[:, j])
+            group.create_dataset(name='y', data=y[:, j])
+            group.create_dataset(name='phi', data=phi_s[:, j])

@@ -1,4 +1,10 @@
 *.idea
 *.lpk
 *.csv
+*.h5
+*.data
+*.dat
+*.txt
+*.plt
 *~
+*.zip
