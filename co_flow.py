@@ -30,8 +30,8 @@ def solve_co_flow(input):
     src = np.zeros((nx * ny + ny))
 
     # Assemble the solid equations
-    for i in xrange(1, nx - 1):
-        for j in xrange(1, ny - 1):
+    for i in range(1, nx - 1):
+        for j in range(1, ny - 1):
             x, y = x_coords[i, j], y_coords[i, j]
 
             # Center coefficient
@@ -73,7 +73,7 @@ def solve_co_flow(input):
             src[solid_inds[i, j]] = -qs(x, y)
 
     # Assemble x* = 0 boundary (fixed)
-    for j in xrange(0, ny):
+    for j in range(0, ny):
         y = y_coords[0, j]
 
         ij.append((solid_inds[0, j], solid_inds[0, j]))
@@ -81,7 +81,7 @@ def solve_co_flow(input):
         src[solid_inds[0, j]] += x_0_boundary(y)
 
     # Assemble x* = l boundary (infinite)
-    for j in xrange(1, ny - 1):
+    for j in range(1, ny - 1):
         x, y = x_coords[-1, j], y_coords[-1, j]
         """
         ij.append((inds[-1, j], inds[-1, j]))
@@ -123,7 +123,7 @@ def solve_co_flow(input):
         coeffs.append(-0.5 * (Bi(x, y) / NTU(x, y)) / hx)
 
     # Assemble y* = 0 boundary (neumann)
-    for i in xrange(1, nx):
+    for i in range(1, nx):
         x = x_coords[i, 0]
 
         ij.append((solid_inds[i, 0], solid_inds[i, 0]))
@@ -132,7 +132,7 @@ def solve_co_flow(input):
         coeffs.extend([1.5, -2, 0.5])
 
     # Assemble y* = 1 boundary (robin)
-    for i in xrange(1, nx):
+    for i in range(1, nx):
         x, y = x_coords[i, -1], y_coords[i, -1]
 
         ij.append((solid_inds[i, -1], solid_inds[i, -1]))
@@ -150,7 +150,7 @@ def solve_co_flow(input):
     coeffs.append(1.)
     src[fluid_inds[0]] = 0.
 
-    for i in xrange(1, nx):
+    for i in range(1, nx):
         if i == 1:
             ij.append((fluid_inds[i], fluid_inds[i + 1]))
             ij.append((fluid_inds[i], fluid_inds[i - 1]))
@@ -175,7 +175,7 @@ def solve_co_flow(input):
 
     mat = csr_matrix((coeffs, zip(*ij)), shape=(nx * ny + ny, nx * ny + ny))
 
-    print 'Finished assembly. Solving...'
+    print('Finished assembly. Solving...')
 
     x = spsolve(mat, src)
 
@@ -199,7 +199,7 @@ if __name__ == '__main__':
         'R': lambda x, y: 0.,
         'NTU': lambda x, y: 20.,
         'C': lambda x: 0.5,
-        'Qs': lambda x, y: cos(x) * sin(y),
+        'Qs': lambda x, y: 0.,
         'Qf': lambda x: 0.
     }
 
@@ -212,7 +212,7 @@ if __name__ == '__main__':
                                Bi(x[i, -1], 1.))
     """
 
-    with h5py.File('coflow.h5', 'w') as f:
+    with h5py.File('coflow_Bi10.h5', 'w') as f:
         group = f.create_group('solid')
         group.create_dataset('x', data=x)
         group.create_dataset('y', data=y)
